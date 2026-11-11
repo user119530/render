@@ -17,8 +17,13 @@ jobs:
           set +x
           [ -n "$CODE_TOKEN" ] && echo "CODE_TOKEN: set" || { echo "CODE_TOKEN: MISSING"; exit 1; }
           [ -n "$OUT_KEY" ] && echo "OUT_KEY: set" || { echo "OUT_KEY: MISSING"; exit 1; }
-          # token can read the private code repo?
-          if git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$CODE_TOKEN" | base64 -w0)" ls-remote https://github.com/user119530/ai-clips HEAD >/dev/null 2>&1; then echo "CODE_TOKEN read ai-clips: OK"; else echo "CODE_TOKEN read ai-clips: FAIL"; exit 1; fi
+          # token diagnostics: HTTP codes only
+          code() { curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $CODE_TOKEN" -H "Accept: application/vnd.github+json" "$1"; }
+          echo "token valid (GET /user): $(code https://api.github.com/user)"
+          echo "read ai-clips via API: $(code https://api.github.com/repos/user119530/ai-clips)"
+          echo "read ai-clips contents: $(code https://api.github.com/repos/user119530/ai-clips/contents/)"
+          echo "read render via API (should not matter): $(code https://api.github.com/repos/user119530/render)"
+          if git -c http.extraheader="Authorization: Basic $(printf 'x-access-token:%s' "$CODE_TOKEN" | base64 -w0)" ls-remote https://github.com/user119530/ai-clips HEAD >/dev/null 2>&1; then echo "git read ai-clips: OK"; else echo "git read ai-clips: FAIL"; fi
           # passphrase with special characters: encrypt/decrypt round trip
           head -c 100000 /dev/urandom > t.bin
           openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:OUT_KEY -in t.bin -out t.enc
