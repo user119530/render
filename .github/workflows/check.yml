@@ -1,0 +1,26 @@
+name: check-secrets
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/jolly-tesla-an8f4c]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check secrets (no values printed)
+        env:
+          CODE_TOKEN: ${{ secrets.CODE_TOKEN }}
+          OUT_KEY: ${{ secrets.OUT_KEY }}
+        run: |
+          set +x
+          [ -n "$CODE_TOKEN" ] && echo "CODE_TOKEN: set" || { echo "CODE_TOKEN: MISSING"; exit 1; }
+          [ -n "$OUT_KEY" ] && echo "OUT_KEY: set" || { echo "OUT_KEY: MISSING"; exit 1; }
+          # token can read the private code repo?
+          if git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$CODE_TOKEN" | base64 -w0)" ls-remote https://github.com/user119530/ai-clips HEAD >/dev/null 2>&1; then echo "CODE_TOKEN read ai-clips: OK"; else echo "CODE_TOKEN read ai-clips: FAIL"; exit 1; fi
+          # passphrase with special characters: encrypt/decrypt round trip
+          head -c 100000 /dev/urandom > t.bin
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:OUT_KEY -in t.bin -out t.enc
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:OUT_KEY -in t.enc -out t.dec
+          cmp t.bin t.dec && echo "OUT_KEY encrypt/decrypt round trip: OK"
